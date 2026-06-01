@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>AR Centralina — DKNatureLink</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #000; }
+
+    #ui-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none; z-index: 100;
+    }
+
+    /* HUD top bar */
+    #hud-top {
+      position: absolute; top: 16px; left: 16px; right: 16px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .hud-chip {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+      color: #00ff88; background: rgba(0,255,136,0.1);
+      border: 1px solid rgba(0,255,136,0.35);
+      border-radius: 4px; padding: 4px 10px;
+    }
+    .hud-rec {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; color: rgba(255,80,80,0.9);
+      margin-left: auto;
+    }
+    .rec-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: #ff5050;
+      animation: blink 1.2s ease infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+
+    /* Bottom info panel */
+    #info-panel {
+      position: absolute; bottom: 24px; left: 16px; right: 16px;
+      background: rgba(6,18,10,0.92);
+      border: 1px solid rgba(0,255,136,0.35);
+      border-radius: 12px; padding: 16px 18px;
+      transition: opacity 0.4s ease, transform 0.4s ease;
+      opacity: 0; transform: translateY(12px);
+    }
+    #info-panel.visible { opacity: 1; transform: translateY(0); }
+
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .panel-id {
+      font-size: 10px; color: #00ff88; letter-spacing: 0.1em;
+      text-transform: uppercase; font-weight: 600;
+    }
+    .panel-ts { font-size: 10px; color: rgba(255,255,255,0.4); }
+
+    .metrics-row {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+      margin-bottom: 12px;
+    }
+    .metric-box {
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px; padding: 10px 12px;
+    }
+    .metric-label { font-size: 10px; color: rgba(255,255,255,0.45); margin-bottom: 4px; }
+    .metric-value { font-size: 20px; font-weight: 600; }
+    .metric-unit { font-size: 11px; font-weight: 400; }
+    .c-ok    { color: #4ade80; }
+    .c-warn  { color: #fbbf24; }
+    .c-danger{ color: #f87171; }
+    .c-white { color: #fff; }
+
+    .moisture-bar-wrap {
+      width: 100%; height: 4px; background: rgba(255,255,255,0.1);
+      border-radius: 2px; margin: 6px 0 12px;
+    }
+    .moisture-bar-fill {
+      height: 100%; border-radius: 2px;
+      transition: width 0.6s ease, background 0.6s ease;
+    }
+
+    .status-row {
+      display: flex; align-items: center; gap: 8px;
+      padding-top: 10px;
+      border-top: 0.5px solid rgba(0,255,136,0.15);
+    }
+    .status-badge {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 500;
+      padding: 4px 10px; border-radius: 6px;
+    }
+    .badge-ok     { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .badge-warn   { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .badge-danger { background: rgba(248,113,113,0.15); color: #f87171; }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .bdot-ok     { background: #4ade80; }
+    .bdot-warn   { background: #fbbf24; }
+    .bdot-danger { background: #f87171; }
+
+    .alert-text {
+      font-size: 10px; color: #fbbf24; margin-top: 6px;
+      padding: 6px 10px; background: rgba(251,191,36,0.08);
+      border-left: 2px solid #fbbf24; border-radius: 0 4px 4px 0;
+    }
+
+    /* Scanning status overlay */
+    #scan-status {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 12px; color: rgba(0,255,136,0.7);
+      letter-spacing: 0.12em; text-align: center;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    #scan-status.hidden { opacity: 0; }
+
+    /* Zone switcher (for demo/testing without marker) */
+    #zone-switcher {
+      position: absolute; top: 56px; right: 16px;
+      display: flex; flex-direction: column; gap: 6px;
+      pointer-events: all;
+    }
+    .zone-btn {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+      color: rgba(0,255,136,0.8);
+      background: rgba(6,18,10,0.85);
+      border: 1px solid rgba(0,255,136,0.25);
+      border-radius: 6px; padding: 6px 12px;
+      cursor: pointer; text-align: center;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .zone-btn.active {
+      border-color: rgba(0,255,136,0.8);
+      background: rgba(0,255,136,0.12);
+    }
+
+    /* Demo mode banner */
+    #demo-banner {
+      position: absolute; bottom: 220px; left: 16px; right: 16px;
+      background: rgba(6,18,10,0.7);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 8px 14px;
+      font-size: 10px; color: rgba(255,255,255,0.45);
+      text-align: center; letter-spacing: 0.04em;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── AR.js scene ─── -->
+<a-scene
+  embedded
+  arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+  vr-mode-ui="enabled: false"
+  renderer="logarithmicDepthBuffer: true; antialias: true;"
+>
+
+  <!-- Marker Aruco 3x3 ID=1 (default "hiro" come fallback) -->
+  <a-marker type="barcode" value="1" id="marker-aruco">
+    <!-- Pannello 3D sopra la centralina -->
+    <a-entity position="0 0.5 0">
+
+      <!-- Sfondo pannello -->
+      <a-plane
+        width="1.8" height="1.1"
+        color="#06120a"
+        opacity="0.92"
+        position="0 0 0"
+      ></a-plane>
+
+      <!-- Bordo verde -->
+      <a-plane
+        width="1.82" height="1.12"
+        color="#00ff88"
+        opacity="0.35"
+        position="0 0 -0.001"
+      ></a-plane>
+
+      <!-- Titolo zona -->
+      <a-text
+        value="ZONA NORD — CEN-001"
+        color="#00ff88"
+        width="1.6" align="left"
+        position="-0.82 0.42 0.01"
+        font="https://cdn.jsdelivr.net/npm/aframe/examples/fonts/mozillavr.fnt"
+      ></a-text>
+
+      <!-- Soil moisture label -->
+      <a-text value="Soil moisture" color="#ffffff" opacity="0.5"
+        width="1.1" align="left" position="-0.82 0.22 0.01"></a-text>
+      <a-text value="72 %" color="#4ade80" id="ar3d-moisture"
+        width="1.4" align="right" position="0.82 0.22 0.01"></a-text>
+
+      <!-- Irrigazione -->
+      <a-text value="Irrigazione" color="#ffffff" opacity="0.5"
+        width="1.1" align="left" position="-0.82 0.04 0.01"></a-text>
+      <a-text value="OFF — ok" color="#4ade80" id="ar3d-irr"
+        width="1.4" align="right" position="0.82 0.04 0.01"></a-text>
+
+      <!-- Temp -->
+      <a-text value="Temp. suolo" color="#ffffff" opacity="0.5"
+        width="1.1" align="left" position="-0.82 -0.14 0.01"></a-text>
+      <a-text value="19.4 °C" color="#ffffff" id="ar3d-temp"
+        width="1.4" align="right" position="0.82 -0.14 0.01"></a-text>
+
+      <!-- Divider -->
+      <a-plane width="1.7" height="0.005" color="#00ff88" opacity="0.2"
+        position="0 -0.24 0.01"></a-plane>
+
+      <!-- Stato -->
+      <a-text value="● Sistema normale" color="#4ade80" id="ar3d-status"
+        width="1.6" align="center" position="0 -0.36 0.01"></a-text>
+
+    </a-entity>
+  </a-marker>
+
+  <!-- Fallback: marker Hiro standard (più facile da stampare per test rapido) -->
+  <a-marker preset="hiro" id="marker-hiro">
+    <a-entity position="0 0.5 0">
+      <a-plane width="1.8" height="0.6" color="#06120a" opacity="0.92"></a-plane>
+      <a-plane width="1.82" height="0.62" color="#00ff88" opacity="0.35" position="0 0 -0.001"></a-plane>
+      <a-text value="HIRO MARKER — CEN-TEST" color="#00ff88"
+        width="1.6" align="center" position="0 0.1 0.01"></a-text>
+      <a-text value="Soil: 72% | Temp: 19.4°C | Stato: OK" color="#4ade80"
+        width="1.6" align="center" position="0 -0.1 0.01"></a-text>
+    </a-entity>
+  </a-marker>
+
+  <a-entity camera></a-entity>
+</a-scene>
+
+
+<!-- ─── UI overlay ─── -->
+<div id="ui-overlay">
+
+  <div id="hud-top">
+    <div class="hud-chip">AR LIVE</div>
+    <div class="hud-chip" id="hud-zone-chip">ZONA NORD</div>
+    <div class="hud-rec"><div class="rec-dot"></div>REC</div>
+  </div>
+
+  <!-- Zone switcher (demo: seleziona zona senza marker fisici diversi) -->
+  <div id="zone-switcher">
+    <div class="zone-btn active" onclick="selectZone(0)">NORD</div>
+    <div class="zone-btn" onclick="selectZone(1)">EST</div>
+    <div class="zone-btn" onclick="selectZone(2)">SUD</div>
+  </div>
+
+  <div id="scan-status">PUNTA LA CAMERA<br>AL MARKER ARUCO</div>
+
+  <div id="demo-banner">Demo mode — usa i pulsanti per cambiare zona · oppure stampa il marker Hiro</div>
+
+  <div id="info-panel">
+    <div class="panel-header">
+      <div class="panel-id" id="panel-id">ZONA NORD — CEN-001</div>
+      <div class="panel-ts" id="panel-ts">aggiornato 2 min fa</div>
+    </div>
+
+    <div class="metrics-row">
+      <div class="metric-box">
+        <div class="metric-label">Soil moisture</div>
+        <div class="metric-value c-ok" id="m-moisture">72<span class="metric-unit">%</span></div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-label">Temp. suolo</div>
+        <div class="metric-value c-white" id="m-temp">19.4<span class="metric-unit">°C</span></div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-label">Irrigazione</div>
+        <div class="metric-value c-ok" id="m-irr">OFF</div>
+      </div>
+    </div>
+
+    <div class="moisture-bar-wrap">
+      <div class="moisture-bar-fill" id="moisture-bar" style="width:72%; background:#4ade80;"></div>
+    </div>
+
+    <div class="status-row">
+      <div class="status-badge badge-ok" id="status-badge">
+        <span class="badge-dot bdot-ok" id="badge-dot"></span>
+        <span id="badge-text">Sistema normale</span>
+      </div>
+    </div>
+
+    <div class="alert-text" id="alert-text" style="display:none"></div>
+  </div>
+
+</div>
+
+
+<script>
+// ─── Dati centraline (simulati — sostituire con fetch Firebase) ───
+// Per collegare Firebase Realtime DB:
+//   import { initializeApp } from "firebase/app";
+//   import { getDatabase, ref, onValue } from "firebase/database";
+//   const db = getDatabase(app);
+//   onValue(ref(db, 'centraline/CEN-001'), snap => updatePanel(snap.val()));
+
+const zones = [
+  {
+    id: 'CEN-001', name: 'Zona Nord', chip: 'ZONA NORD',
+    moisture: 72, temp: 19.4, irrigation: false,
+    anomaly: false, alertText: '',
+    lastUpdate: '2 min fa', status: 'ok'
+  },
+  {
+    id: 'CEN-002', name: 'Zona Est', chip: 'ZONA EST',
+    moisture: 31, temp: 22.1, irrigation: true,
+    anomaly: true, alertText: 'Pressione valvola anomala — verifica raccordo V3',
+    lastUpdate: '8 min fa', status: 'danger'
+  },
+  {
+    id: 'CEN-003', name: 'Zona Sud', chip: 'ZONA SUD',
+    moisture: 54, temp: 21.0, irrigation: false,
+    anomaly: true, alertText: 'Soil moisture in calo — schedulare irrigazione',
+    lastUpdate: '5 min fa', status: 'warn'
+  }
+];
+
+let currentZone = 0;
+
+function moistureColor(v) {
+  return v < 35 ? '#f87171' : v < 50 ? '#fbbf24' : '#4ade80';
+}
+function moistureClass(v) {
+  return v < 35 ? 'c-danger' : v < 50 ? 'c-warn' : 'c-ok';
+}
+function statusInfo(z) {
+  if (z.status === 'ok')     return { cls: 'badge-ok',     dot: 'bdot-ok',     text: 'Sistema normale' };
+  if (z.status === 'warn')   return { cls: 'badge-warn',   dot: 'bdot-warn',   text: 'Attenzione richiesta' };
+  return                            { cls: 'badge-danger', dot: 'bdot-danger', text: 'Anomalia rilevata' };
+}
+
+function updatePanel(z) {
+  // HUD chip
+  document.getElementById('hud-zone-chip').textContent = z.chip;
+
+  // Bottom panel
+  document.getElementById('panel-id').textContent = `${z.name.toUpperCase()} — ${z.id}`;
+  document.getElementById('panel-ts').textContent = `aggiornato ${z.lastUpdate}`;
+
+  const mc = moistureClass(z.moisture);
+  document.getElementById('m-moisture').className = `metric-value ${mc}`;
+  document.getElementById('m-moisture').innerHTML = `${z.moisture}<span class="metric-unit">%</span>`;
+  document.getElementById('m-temp').innerHTML = `${z.temp}<span class="metric-unit">°C</span>`;
+  document.getElementById('m-irr').className = `metric-value ${z.irrigation ? 'c-warn' : 'c-ok'}`;
+  document.getElementById('m-irr').textContent = z.irrigation ? 'ON' : 'OFF';
+
+  document.getElementById('moisture-bar').style.width = z.moisture + '%';
+  document.getElementById('moisture-bar').style.background = moistureColor(z.moisture);
+
+  const si = statusInfo(z);
+  const badge = document.getElementById('status-badge');
+  badge.className = `status-badge ${si.cls}`;
+  document.getElementById('badge-dot').className = `badge-dot ${si.dot}`;
+  document.getElementById('badge-text').textContent = si.text;
+
+  const alertEl = document.getElementById('alert-text');
+  if (z.anomaly) {
+    alertEl.style.display = 'block';
+    alertEl.textContent = z.alertText;
+  } else {
+    alertEl.style.display = 'none';
+  }
+
+  // 3D AR text (se il marker è visibile)
+  try {
+    document.querySelector('#ar3d-moisture').setAttribute('value', z.moisture + ' %');
+    document.querySelector('#ar3d-moisture').setAttribute('color', moistureColor(z.moisture));
+    document.querySelector('#ar3d-irr').setAttribute('value', z.irrigation ? 'ON — attiva' : 'OFF — ok');
+    document.querySelector('#ar3d-irr').setAttribute('color', z.irrigation ? '#fbbf24' : '#4ade80');
+    document.querySelector('#ar3d-temp').setAttribute('value', z.temp + ' °C');
+    document.querySelector('#ar3d-status').setAttribute('value',
+      z.anomaly ? '⚠ ' + z.alertText.substring(0,30) + '...' : '● Sistema normale');
+    document.querySelector('#ar3d-status').setAttribute('color',
+      z.status === 'ok' ? '#4ade80' : z.status === 'warn' ? '#fbbf24' : '#f87171');
+  } catch(e) {}
+}
+
+function selectZone(i) {
+  currentZone = i;
+  document.querySelectorAll('.zone-btn').forEach((b, idx) => {
+    b.classList.toggle('active', idx === i);
+  });
+  updatePanel(zones[i]);
+  showPanel();
+}
+
+function showPanel() {
+  document.getElementById('info-panel').classList.add('visible');
+  document.getElementById('scan-status').classList.add('hidden');
+}
+
+// ─── Marker detection events ───
+document.querySelector('#marker-aruco').addEventListener('markerFound', () => {
+  showPanel();
+});
+document.querySelector('#marker-aruco').addEventListener('markerLost', () => {
+  // mantieni il pannello visibile per 3 secondi dopo aver perso il marker
+  setTimeout(() => {
+    if (!markerVisible) {
+      document.getElementById('info-panel').classList.remove('visible');
+      document.getElementById('scan-status').classList.remove('hidden');
+    }
+  }, 3000);
+});
+
+document.querySelector('#marker-hiro').addEventListener('markerFound', showPanel);
+
+// Inizializza
+updatePanel(zones[0]);
+
+// Auto-mostra il pannello in demo mode (senza marker fisico)
+setTimeout(showPanel, 1500);
+</script>
+
+</body>
+</html>
