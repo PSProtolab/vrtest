@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XR Test</title>
+  <style>
+    body { background:#000; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; gap:16px; }
+    button { padding:20px 50px; background:#00ff88; border:none; border-radius:10px; font-size:18px; font-weight:700; cursor:pointer; color:#000; }
+    #log { color:#fff; font-size:12px; font-family:monospace; text-align:center; max-width:360px; line-height:1.8; white-space:pre-wrap; }
+
+    /* Overlay: testo enorme, impossibile da non vedere */
+    #xr-ui {
+      display:none;
+      position:fixed; inset:0;
+      z-index:9999;
+      pointer-events:none;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+      gap:20px;
+    }
+    #xr-ui.show { display:flex; }
+    #xr-ui .big {
+      font-size:48px; font-weight:900;
+      color:#00ff88;
+      text-shadow: 0 0 20px #00ff88, 0 0 40px #00ff88;
+      background:rgba(0,0,0,0.7);
+      padding:20px 40px; border-radius:16px;
+      border:2px solid #00ff88;
+    }
+    #xr-ui .sub {
+      font-size:18px; color:#fff;
+      background:rgba(0,0,0,0.6);
+      padding:10px 24px; border-radius:8px;
+    }
+  </style>
+</head>
+<body>
+
+  <button onclick="startAR()">START AR</button>
+  <div id="log">pronto</div>
+
+  <!-- Questo deve apparire nel visore -->
+  <div id="xr-ui">
+    <div class="big">AR FUNZIONA ✓</div>
+    <div class="sub" id="xr-info">sessione attiva</div>
+  </div>
+
+  <canvas id="c" style="display:none;position:fixed;inset:0;width:100%;height:100%;"></canvas>
+
+<script>
+function log(msg){
+  const el = document.getElementById('log');
+  el.textContent += '\n' + msg;
+  console.log(msg);
+}
+
+async function startAR(){
+  log('click...');
+
+  if(!navigator.xr){ log('NO navigator.xr'); showFallback(); return; }
+  log('navigator.xr OK');
+
+  let supported = false;
+  try { supported = await navigator.xr.isSessionSupported('immersive-ar'); log('immersive-ar: '+supported); }
+  catch(e){ log('isSessionSupported err: '+e.message); }
+
+  if(!supported){ log('AR non supportata'); showFallback(); return; }
+
+  // Tentativo 1: con dom-overlay
+  try {
+    log('requestSession con dom-overlay...');
+    const session = await navigator.xr.requestSession('immersive-ar', {
+      requiredFeatures: ['local'],
+      optionalFeatures: ['dom-overlay'],
+      domOverlay: { root: document.getElementById('xr-ui') }
+    });
+    log('sessione OK');
+    await setupSession(session, 'dom-overlay');
+    return;
+  } catch(e){
+    log('dom-overlay fallito: '+e.message);
+  }
+
+  // Tentativo 2: senza dom-overlay
+  try {
+    log('requestSession senza dom-overlay...');
+    const session = await navigator.xr.requestSession('immersive-ar', {
+      requiredFeatures: ['local']
+    });
+    log('sessione OK (no overlay)');
+    await setupSession(session, 'no-overlay');
+    return;
+  } catch(e){
+    log('anche questo fallito: '+e.message);
+    showFallback();
+  }
+}
+
+async function setupSession(session, mode){
+  const canvas = document.getElementById('c');
+  canvas.style.display = 'block';
+  const gl = canvas.getContext('webgl', { xrCompatible:true });
+  try { await gl.makeXRCompatible(); } catch(e){ log('makeXRCompatible: '+e.message); }
+
+  session.updateRenderState({
+    baseLayer: new XRWebGLLayer(session, gl)
+  });
+
+  // Mostra UI
+  const ui = document.getElementById('xr-ui');
+  ui.classList.add('show');
+  document.getElementById('xr-info').textContent = 'mode: '+mode;
+  log('UI mostrata, mode: '+mode);
+
+  const refSpace = await session.requestReferenceSpace('local');
+  let frames = 0;
+  session.requestAnimationFrame(function loop(t, frame){
+    frames++;
+    if(frames===1) log('primo frame XR ricevuto');
+    if(frames===30) document.getElementById('xr-info').textContent = 'mode:'+mode+' frames:'+frames;
+    session.requestAnimationFrame(loop);
+  });
+
+  session.addEventListener('end', ()=>{ log('sessione terminata'); });
+}
+
+function showFallback(){
+  document.getElementById('xr-ui').classList.add('show');
+  document.getElementById('xr-info').textContent = 'modalità flat (no XR)';
+}
+</script>
+</body>
+</html>
