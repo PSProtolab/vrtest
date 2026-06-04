@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>AR Centralina — DKNatureLink</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
+
+    canvas { display: block; position: fixed; inset: 0; }
+
+    /* ── Overlay UI 2D (dom-overlay, visibile nel visore) ── */
+    #dom-overlay {
+      position: fixed; inset: 0; pointer-events: none;
+      display: flex; flex-direction: column;
+      justify-content: flex-end; padding: 24px;
+      z-index: 10;
+    }
+
+    #info-panel {
+      background: rgba(6,18,10,0.90);
+      border: 1px solid rgba(0,255,136,0.4);
+      border-radius: 14px; padding: 18px 20px;
+      max-width: 480px; width: 100%;
+      opacity: 0; transform: translateY(10px);
+      transition: opacity 0.4s, transform 0.4s;
+      pointer-events: all;
+    }
+    #info-panel.visible { opacity: 1; transform: translateY(0); }
+
+    .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .panel-id { font-size: 11px; color: #00ff88; letter-spacing: 0.1em; font-weight: 700; text-transform: uppercase; }
+    .panel-ts { font-size: 10px; color: rgba(255,255,255,0.35); }
+
+    .metrics-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 12px; }
+    .metric-box { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px; }
+    .metric-label { font-size: 10px; color: rgba(255,255,255,0.4); margin-bottom: 4px; }
+    .metric-value { font-size: 22px; font-weight: 600; }
+    .metric-unit { font-size: 11px; font-weight: 400; }
+    .c-ok { color: #4ade80; } .c-warn { color: #fbbf24; } .c-danger { color: #f87171; } .c-white { color: #fff; }
+
+    .bar-wrap { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin: 0 0 12px; }
+    .bar-fill { height: 100%; border-radius: 2px; transition: width .6s, background .6s; }
+
+    .status-row { display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: .5px solid rgba(0,255,136,0.15); }
+    .badge { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 6px; }
+    .badge-ok { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .badge-warn { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .badge-danger { background: rgba(248,113,113,0.15); color: #f87171; }
+    .bdot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .alert-box { font-size: 10px; color: #fbbf24; margin-top: 8px; padding: 6px 10px; background: rgba(251,191,36,0.08); border-left: 2px solid #fbbf24; border-radius: 0 4px 4px 0; }
+
+    /* HUD top */
+    #hud { position: fixed; top: 16px; left: 16px; right: 16px; display: flex; gap: 8px; align-items: center; pointer-events: none; z-index: 11; }
+    .chip { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #00ff88; background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.35); border-radius: 4px; padding: 4px 10px; }
+    .rec { display: flex; align-items: center; gap: 5px; font-size: 11px; color: rgba(255,80,80,0.9); margin-left: auto; }
+    .recdot { width: 7px; height: 7px; border-radius: 50%; background: #ff5050; animation: blink 1.2s ease infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.15} }
+
+    /* Zone switcher */
+    #zone-sw { position: fixed; top: 56px; right: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 11; }
+    .zbtn { font-size: 10px; font-weight: 700; letter-spacing: .06em; color: rgba(0,255,136,0.8); background: rgba(6,18,10,0.85); border: 1px solid rgba(0,255,136,0.25); border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+    .zbtn.active { border-color: rgba(0,255,136,0.8); background: rgba(0,255,136,0.12); }
+
+    /* Enter AR screen */
+    #enter-screen {
+      position: fixed; inset: 0; z-index: 999;
+      background: #000; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 20px;
+    }
+    #enter-screen.hidden { display: none; }
+    #enter-screen p { color: rgba(255,255,255,0.45); font-size: 13px; text-align: center; max-width: 280px; line-height: 1.6; }
+    #btn-ar { padding: 16px 44px; background: rgba(0,255,136,0.12); border: 1.5px solid #00ff88; border-radius: 10px; color: #00ff88; font-size: 16px; font-weight: 700; letter-spacing: .08em; cursor: pointer; }
+    #xr-status { color: rgba(255,255,255,0.35); font-size: 11px; font-family: monospace; }
+  </style>
+</head>
+<body>
+
+<!-- Enter AR screen -->
+<div id="enter-screen">
+  <p>Protolab · DKNatureLink AR</p>
+  <button id="btn-ar">ENTRA IN AR</button>
+  <div id="xr-status">verifica supporto...</div>
+</div>
+
+<!-- Canvas Three.js -->
+<canvas id="c"></canvas>
+
+<!-- DOM overlay (visibile nel visore) -->
+<div id="dom-overlay">
+  <div id="hud">
+    <div class="chip">AR LIVE</div>
+    <div class="chip" id="chip-zone">ZONA NORD</div>
+    <div class="rec"><div class="recdot"></div>REC</div>
+  </div>
+
+  <div id="zone-sw">
+    <div class="zbtn active" onclick="selectZone(0)">NORD</div>
+    <div class="zbtn" onclick="selectZone(1)">EST</div>
+    <div class="zbtn" onclick="selectZone(2)">SUD</div>
+  </div>
+
+  <div id="info-panel">
+    <div class="panel-header">
+      <div class="panel-id" id="p-id">ZONA NORD — CEN-001</div>
+      <div class="panel-ts" id="p-ts">aggiornato 2 min fa</div>
+    </div>
+    <div class="metrics-row">
+      <div class="metric-box">
+        <div class="metric-label">Soil moisture</div>
+        <div class="metric-value c-ok" id="m-moist">72<span class="metric-unit">%</span></div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-label">Temp. suolo</div>
+        <div class="metric-value c-white" id="m-temp">19.4<span class="metric-unit">°C</span></div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-label">Irrigazione</div>
+        <div class="metric-value c-ok" id="m-irr">OFF</div>
+      </div>
+    </div>
+    <div class="bar-wrap"><div class="bar-fill" id="bar" style="width:72%;background:#4ade80"></div></div>
+    <div class="status-row">
+      <div class="badge badge-ok" id="badge"><span class="bdot" id="bdot" style="background:#4ade80"></span><span id="badge-txt">Sistema normale</span></div>
+    </div>
+    <div class="alert-box" id="alert-box" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+// ── Dati centraline (sostituire con fetch Firebase) ──
+const zones = [
+  { id:'CEN-001', name:'Zona Nord', chip:'ZONA NORD', moisture:72, temp:19.4, irrigation:false, anomaly:false, alertText:'', lastUpdate:'2 min fa', status:'ok' },
+  { id:'CEN-002', name:'Zona Est',  chip:'ZONA EST',  moisture:31, temp:22.1, irrigation:true,  anomaly:true,  alertText:'Pressione valvola anomala — verifica raccordo V3', lastUpdate:'8 min fa', status:'danger' },
+  { id:'CEN-003', name:'Zona Sud',  chip:'ZONA SUD',  moisture:54, temp:21.0, irrigation:false, anomaly:true,  alertText:'Soil moisture in calo — schedulare irrigazione', lastUpdate:'5 min fa', status:'warn' }
+];
+let currentZone = 0;
+
+function mCol(v){ return v<35?'#f87171':v<50?'#fbbf24':'#4ade80'; }
+function mCls(v){ return v<35?'c-danger':v<50?'c-warn':'c-ok'; }
+
+function updatePanel(z){
+  document.getElementById('chip-zone').textContent = z.chip;
+  document.getElementById('p-id').textContent = `${z.name.toUpperCase()} — ${z.id}`;
+  document.getElementById('p-ts').textContent = `aggiornato ${z.lastUpdate}`;
+  document.getElementById('m-moist').className = `metric-value ${mCls(z.moisture)}`;
+  document.getElementById('m-moist').innerHTML = `${z.moisture}<span class="metric-unit">%</span>`;
+  document.getElementById('m-temp').innerHTML = `${z.temp}<span class="metric-unit">°C</span>`;
+  document.getElementById('m-irr').className = `metric-value ${z.irrigation?'c-warn':'c-ok'}`;
+  document.getElementById('m-irr').textContent = z.irrigation?'ON':'OFF';
+  document.getElementById('bar').style.width = z.moisture+'%';
+  document.getElementById('bar').style.background = mCol(z.moisture);
+  const bc = z.status==='ok'?'badge-ok':z.status==='warn'?'badge-warn':'badge-danger';
+  document.getElementById('badge').className = `badge ${bc}`;
+  document.getElementById('bdot').style.background = mCol(z.moisture);
+  document.getElementById('badge-txt').textContent = z.status==='ok'?'Sistema normale':z.status==='warn'?'Attenzione richiesta':'Anomalia rilevata';
+  const ab = document.getElementById('alert-box');
+  ab.style.display = z.anomaly?'block':'none';
+  ab.textContent = z.alertText;
+}
+
+function selectZone(i){
+  currentZone = i;
+  document.querySelectorAll('.zbtn').forEach((b,idx)=>b.classList.toggle('active',idx===i));
+  updatePanel(zones[i]);
+}
+
+// ── Three.js + WebXR ──
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 100);
+scene.add(camera);
+
+// Luce ambiente
+scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+
+// Pannello 3D: piano verde semitrasparente fisso davanti alla camera
+// Posizionato a 1.5m davanti, altezza occhi
+const panelGeo = new THREE.PlaneGeometry(0.6, 0.35);
+const panelMat = new THREE.MeshBasicMaterial({
+  color: 0x06120a, transparent: true, opacity: 0.0,
+  side: THREE.DoubleSide
+});
+const panel3d = new THREE.Mesh(panelGeo, panelMat);
+panel3d.position.set(0, 0, -1.5);
+camera.add(panel3d);
+
+// Bordo verde del pannello
+const borderGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(0.62, 0.37));
+const borderMat = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.5 });
+const border3d = new THREE.LineSegments(borderGeo, borderMat);
+border3d.position.set(0, 0, -1.499);
+camera.add(border3d);
+
+// Resize handler
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+// ── Render loop ──
+renderer.setAnimationLoop((time, frame) => {
+  renderer.render(scene, camera);
+});
+
+// ── Enter AR ──
+async function enterAR(){
+  if (!navigator.xr) {
+    // Fallback flat mode
+    document.getElementById('enter-screen').classList.add('hidden');
+    document.getElementById('info-panel').classList.add('visible');
+    return;
+  }
+  try {
+    const supported = await navigator.xr.isSessionSupported('immersive-ar');
+    if (supported) {
+      const session = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['local'],
+        optionalFeatures: ['dom-overlay'],
+        domOverlay: { root: document.getElementById('dom-overlay') }
+      });
+      renderer.xr.setSession(session);
+      document.getElementById('enter-screen').classList.add('hidden');
+      // Mostra panel dopo mezzo secondo
+      setTimeout(()=>{ document.getElementById('info-panel').classList.add('visible'); }, 500);
+    } else {
+      // Flat fallback
+      document.getElementById('enter-screen').classList.add('hidden');
+      document.getElementById('info-panel').classList.add('visible');
+    }
+  } catch(e) {
+    console.error('XR error:', e);
+    document.getElementById('xr-status').textContent = 'Errore: ' + e.message;
+  }
+}
+
+document.getElementById('btn-ar').addEventListener('click', enterAR);
+
+// ── Check WebXR on load ──
+window.addEventListener('load', async () => {
+  const st = document.getElementById('xr-status');
+  updatePanel(zones[0]);
+  if (!navigator.xr) {
+    st.textContent = 'WebXR non disponibile — modalità flat';
+    document.getElementById('btn-ar').textContent = 'APRI DEMO';
+    return;
+  }
+  try {
+    const ok = await navigator.xr.isSessionSupported('immersive-ar');
+    st.textContent = ok ? '✓ AR supportata — Quest 3 pronto' : 'AR non supportata — modalità flat';
+    if (!ok) document.getElementById('btn-ar').textContent = 'APRI DEMO';
+  } catch(e) {
+    st.textContent = 'errore: ' + e.message;
+  }
+});
+</script>
+</body>
+</html>
