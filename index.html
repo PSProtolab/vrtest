@@ -6,149 +6,155 @@
   <title>AR Centralina — DKNatureLink</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { background:#000; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; }
+    body { background:#000; font-family:-apple-system, sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; gap:16px; }
 
-    #enter-screen { display:flex; flex-direction:column; align-items:center; gap:16px; }
-    #enter-screen p { color:rgba(255,255,255,0.5); font-size:14px; text-align:center; max-width:300px; line-height:1.6; }
-    #btn-ar { padding:18px 48px; background:rgba(0,255,136,0.12); border:2px solid #00ff88; border-radius:12px; color:#00ff88; font-size:18px; font-weight:700; letter-spacing:.08em; cursor:pointer; }
-    #xr-status { color:rgba(255,255,255,0.35); font-size:12px; font-family:monospace; text-align:center; max-width:320px; }
+    button { padding:20px 50px; background:#00ff88; border:none; border-radius:10px; font-size:18px; font-weight:700; cursor:pointer; color:#000; }
+    #log { color:#fff; font-size:12px; font-family:monospace; text-align:center; max-width:360px; line-height:1.8; white-space:pre-wrap; }
 
-    /* ── DOM Overlay ── visibile nel visore sopra il passthrough */
+    /* ── STESSO PATTERN DEL TEST CHE FUNZIONA ── */
+    /* Il div è display:none ma diventa display:flex al click — prima della sessione XR */
     #xr-ui {
-      display:none;
-      position:fixed; inset:0; z-index:9999;
-      pointer-events:none;
+      display: none;
+      position: fixed; inset: 0;
+      z-index: 9999;
+      pointer-events: none;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 24px;
     }
-    #xr-ui.show { display:block; }
+    #xr-ui.show { display: flex; }
 
-    /* HUD top */
+    /* HUD top — pointer-events none già ereditato */
     #hud {
-      position:absolute; top:20px; left:20px; right:20px;
-      display:flex; gap:10px; align-items:center;
+      position: absolute; top: 20px; left: 20px; right: 20px;
+      display: flex; gap: 10px; align-items: center;
     }
-    .chip { font-size:11px; font-weight:700; letter-spacing:.08em; color:#00ff88; background:rgba(0,255,136,0.1); border:1px solid rgba(0,255,136,0.4); border-radius:5px; padding:5px 12px; }
-    .rec { margin-left:auto; display:flex; align-items:center; gap:5px; font-size:11px; color:#ff5050; }
-    .recdot { width:7px; height:7px; border-radius:50%; background:#ff5050; animation:blink 1.2s infinite; }
+    .chip {
+      font-size: 13px; font-weight: 700; letter-spacing: .08em;
+      color: #00ff88; background: rgba(0,0,0,0.7);
+      border: 1.5px solid #00ff88;
+      border-radius: 6px; padding: 6px 14px;
+    }
+    .rec { margin-left:auto; display:flex; align-items:center; gap:6px; font-size:13px; color:#ff5050; }
+    .recdot { width:8px; height:8px; border-radius:50%; background:#ff5050; animation:blink 1.2s infinite; }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.1} }
 
     /* Zone switcher */
     #zones {
-      position:absolute; top:68px; right:20px;
-      display:flex; flex-direction:column; gap:8px;
-      pointer-events:all;
+      position: absolute; top: 70px; right: 20px;
+      display: flex; flex-direction: column; gap: 8px;
+      pointer-events: all;
     }
-    .zbtn { font-size:11px; font-weight:700; color:rgba(0,255,136,0.8); background:rgba(6,18,10,0.85); border:1px solid rgba(0,255,136,0.25); border-radius:7px; padding:8px 16px; cursor:pointer; }
-    .zbtn.active { border-color:#00ff88; background:rgba(0,255,136,0.15); color:#00ff88; }
+    .zbtn {
+      font-size: 13px; font-weight: 700;
+      color: #00ff88; background: rgba(0,0,0,0.75);
+      border: 1.5px solid rgba(0,255,136,0.4);
+      border-radius: 8px; padding: 10px 18px; cursor: pointer;
+    }
+    .zbtn.active { border-color: #00ff88; background: rgba(0,255,136,0.15); }
 
-    /* Pannello dati in basso */
+    /* Pannello principale */
     #panel {
-      position:absolute; bottom:32px; left:24px; right:24px;
-      background:rgba(6,18,10,0.92);
-      border:1.5px solid rgba(0,255,136,0.5);
-      border-radius:16px; padding:20px 22px;
-      pointer-events:all;
+      width: 100%;
+      background: rgba(0,0,0,0.82);
+      border: 1.5px solid #00ff88;
+      border-radius: 16px; padding: 20px 22px;
+      pointer-events: all;
+      box-shadow: 0 0 30px rgba(0,255,136,0.15);
     }
 
-    .panel-title { font-size:11px; color:#00ff88; letter-spacing:.1em; font-weight:700; text-transform:uppercase; margin-bottom:14px; }
+    .ptitle {
+      font-size: 13px; color: #00ff88; letter-spacing: .1em;
+      font-weight: 700; text-transform: uppercase; margin-bottom: 16px;
+    }
 
-    .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px; }
-    .metric { background:rgba(255,255,255,0.06); border-radius:8px; padding:10px 12px; }
-    .mlabel { font-size:10px; color:rgba(255,255,255,0.4); margin-bottom:4px; }
-    .mval { font-size:24px; font-weight:700; }
-    .munit { font-size:11px; font-weight:400; }
-    .ok     { color:#4ade80; }
-    .warn   { color:#fbbf24; }
-    .danger { color:#f87171; }
-    .white  { color:#fff; }
+    .metrics { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 14px; }
+    .metric { background: rgba(255,255,255,0.07); border-radius: 8px; padding: 12px; }
+    .mlabel { font-size: 11px; color: rgba(255,255,255,0.45); margin-bottom: 5px; }
+    .mval { font-size: 26px; font-weight: 700; }
+    .munit { font-size: 12px; font-weight: 400; }
+    .ok     { color: #4ade80; }
+    .warn   { color: #fbbf24; }
+    .danger { color: #f87171; }
+    .white  { color: #fff; }
 
-    .bar-wrap { height:5px; background:rgba(255,255,255,0.1); border-radius:3px; margin-bottom:14px; }
-    .bar-fill { height:100%; border-radius:3px; transition:width .5s, background .5s; }
+    .bar-wrap { height: 5px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-bottom: 14px; }
+    .bar-fill { height: 100%; border-radius: 3px; transition: width .5s, background .5s; }
 
-    .status-row { display:flex; align-items:center; gap:8px; padding-top:12px; border-top:.5px solid rgba(0,255,136,0.15); flex-wrap:wrap; }
-    .badge { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; padding:5px 12px; border-radius:7px; }
+    .srow { display:flex; align-items:center; gap:8px; padding-top:12px; border-top:1px solid rgba(0,255,136,0.15); }
+    .badge { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; padding:6px 14px; border-radius:8px; }
     .badge.ok     { background:rgba(74,222,128,0.15); color:#4ade80; }
-    .badge.warn   { background:rgba(251,191,36,0.15); color:#fbbf24; }
+    .badge.warn   { background:rgba(251,191,36,0.15);  color:#fbbf24; }
     .badge.danger { background:rgba(248,113,113,0.15); color:#f87171; }
-    .bdot { width:7px; height:7px; border-radius:50%; }
-    .panel-ts { font-size:10px; color:rgba(255,255,255,0.35); margin-left:auto; }
+    .bdot { width:8px; height:8px; border-radius:50%; }
+    .pts { font-size:11px; color:rgba(255,255,255,0.3); margin-left:auto; }
 
-    .alert-row { margin-top:10px; padding:8px 12px; background:rgba(251,191,36,0.08); border-left:2px solid #fbbf24; border-radius:0 6px 6px 0; font-size:11px; color:#fbbf24; line-height:1.5; }
+    .alert-row {
+      margin-top:12px; padding:10px 14px;
+      background:rgba(251,191,36,0.08);
+      border-left:3px solid #fbbf24;
+      border-radius:0 6px 6px 0;
+      font-size:12px; color:#fbbf24; line-height:1.5;
+    }
   </style>
 </head>
 <body>
 
-<!-- Schermata iniziale — visibile prima di entrare in AR -->
-<div id="enter-screen">
-  <p>Protolab · DKNatureLink AR</p>
+  <p style="color:rgba(255,255,255,0.5);font-size:14px;text-align:center;max-width:280px;line-height:1.6">Protolab · DKNatureLink AR</p>
   <button id="btn-ar">ENTRA IN AR</button>
-  <div id="xr-status">verifica supporto WebXR...</div>
-</div>
+  <div id="log">pronto</div>
 
-<!-- DOM Overlay — deve esistere nel DOM PRIMA di avviare la sessione XR -->
-<div id="xr-ui">
+  <!-- xr-ui: visibile PRIMA di avviare la sessione, stesso pattern del test -->
+  <div id="xr-ui">
 
-  <div id="hud">
-    <div class="chip">AR LIVE</div>
-    <div class="chip" id="chip-zone">ZONA NORD</div>
-    <div class="rec"><div class="recdot"></div>REC</div>
-  </div>
-
-  <div id="zones">
-    <div class="zbtn active" onclick="selectZone(0)">NORD</div>
-    <div class="zbtn" onclick="selectZone(1)">EST</div>
-    <div class="zbtn" onclick="selectZone(2)">SUD</div>
-  </div>
-
-  <div id="panel">
-    <div class="panel-title" id="p-id">ZONA NORD — CEN-001</div>
-    <div class="metrics">
-      <div class="metric">
-        <div class="mlabel">Soil moisture</div>
-        <div class="mval ok" id="m-moist">72<span class="munit">%</span></div>
-      </div>
-      <div class="metric">
-        <div class="mlabel">Temp. suolo</div>
-        <div class="mval white" id="m-temp">19.4<span class="munit">°C</span></div>
-      </div>
-      <div class="metric">
-        <div class="mlabel">Irrigazione</div>
-        <div class="mval ok" id="m-irr">OFF</div>
-      </div>
+    <div id="hud">
+      <div class="chip">AR LIVE</div>
+      <div class="chip" id="chip-zone">ZONA NORD</div>
+      <div class="rec"><div class="recdot"></div>REC</div>
     </div>
-    <div class="bar-wrap"><div class="bar-fill" id="bar" style="width:72%;background:#4ade80"></div></div>
-    <div class="status-row">
-      <div class="badge ok" id="badge">
-        <div class="bdot" id="bdot" style="background:#4ade80"></div>
-        <span id="badge-txt">Sistema normale</span>
-      </div>
-      <div class="panel-ts" id="p-ts">aggiornato 2 min fa</div>
+
+    <div id="zones">
+      <div class="zbtn active" onclick="selectZone(0)">NORD</div>
+      <div class="zbtn" onclick="selectZone(1)">EST</div>
+      <div class="zbtn" onclick="selectZone(2)">SUD</div>
     </div>
-    <div class="alert-row" id="alert-row" style="display:none"></div>
+
+    <div id="panel">
+      <div class="ptitle" id="p-id">ZONA NORD — CEN-001</div>
+      <div class="metrics">
+        <div class="metric">
+          <div class="mlabel">Soil moisture</div>
+          <div class="mval ok" id="m-moist">72<span class="munit">%</span></div>
+        </div>
+        <div class="metric">
+          <div class="mlabel">Temp. suolo</div>
+          <div class="mval white" id="m-temp">19.4<span class="munit">°C</span></div>
+        </div>
+        <div class="metric">
+          <div class="mlabel">Irrigazione</div>
+          <div class="mval ok" id="m-irr">OFF</div>
+        </div>
+      </div>
+      <div class="bar-wrap"><div class="bar-fill" id="bar" style="width:72%;background:#4ade80"></div></div>
+      <div class="srow">
+        <div class="badge ok" id="badge">
+          <div class="bdot" id="bdot" style="background:#4ade80"></div>
+          <span id="badge-txt">Sistema normale</span>
+        </div>
+        <div class="pts" id="p-ts">aggiornato 2 min fa</div>
+      </div>
+      <div class="alert-row" id="alert-row" style="display:none"></div>
+    </div>
+
   </div>
 
-</div>
-
-<!-- Canvas WebXR (trasparente, necessario per mantenere la sessione) -->
-<canvas id="c" style="display:none;position:fixed;inset:0;width:100%;height:100%;"></canvas>
+  <canvas id="c" style="display:none;position:fixed;inset:0;width:100%;height:100%;"></canvas>
 
 <script>
-// ── Dati centraline
-// TODO: sostituire con fetch Firebase
-// import { getDatabase, ref, onValue } from "firebase/database";
-// onValue(ref(db, 'centraline/CEN-001'), snap => updatePanel(snap.val()));
-
 const zones = [
-  { id:'CEN-001', name:'Zona Nord', chip:'ZONA NORD',
-    moisture:72, temp:19.4, irrigation:false,
-    anomaly:false, alertText:'', lastUpdate:'2 min fa', status:'ok' },
-  { id:'CEN-002', name:'Zona Est', chip:'ZONA EST',
-    moisture:31, temp:22.1, irrigation:true,
-    anomaly:true, alertText:'Pressione valvola anomala — verifica raccordo V3',
-    lastUpdate:'8 min fa', status:'danger' },
-  { id:'CEN-003', name:'Zona Sud', chip:'ZONA SUD',
-    moisture:54, temp:21.0, irrigation:false,
-    anomaly:true, alertText:'Soil moisture in calo — schedulare irrigazione',
-    lastUpdate:'5 min fa', status:'warn' }
+  { id:'CEN-001', name:'Zona Nord', chip:'ZONA NORD', moisture:72, temp:19.4, irrigation:false, anomaly:false, alertText:'', lastUpdate:'2 min fa', status:'ok' },
+  { id:'CEN-002', name:'Zona Est',  chip:'ZONA EST',  moisture:31, temp:22.1, irrigation:true,  anomaly:true,  alertText:'Pressione valvola anomala — verifica raccordo V3', lastUpdate:'8 min fa', status:'danger' },
+  { id:'CEN-003', name:'Zona Sud',  chip:'ZONA SUD',  moisture:54, temp:21.0, irrigation:false, anomaly:true,  alertText:'Soil moisture in calo — schedulare irrigazione', lastUpdate:'5 min fa', status:'warn' }
 ];
 
 function mCol(v){ return v<35?'#f87171':v<50?'#fbbf24':'#4ade80'; }
@@ -170,8 +176,7 @@ function updatePanel(z){
   const badge = document.getElementById('badge');
   badge.className = 'badge '+z.status;
   document.getElementById('bdot').style.background = mCol(z.moisture);
-  document.getElementById('badge-txt').textContent =
-    z.status==='ok'?'Sistema normale':z.status==='warn'?'Attenzione richiesta':'Anomalia rilevata';
+  document.getElementById('badge-txt').textContent = z.status==='ok'?'Sistema normale':z.status==='warn'?'Attenzione richiesta':'Anomalia rilevata';
   const ar = document.getElementById('alert-row');
   ar.style.display = z.anomaly?'block':'none';
   ar.textContent = z.alertText;
@@ -182,13 +187,21 @@ function selectZone(i){
   updatePanel(zones[i]);
 }
 
-// ── WebXR
+function log(msg){ document.getElementById('log').textContent += '\n'+msg; }
+
 async function enterAR(){
-  // Fallback flat se no WebXR
-  if(!navigator.xr){ showUI(); return; }
+  log('click...');
+  updatePanel(zones[0]);
+
+  // Mostra UI PRIMA di avviare la sessione — chiave del funzionamento
+  document.getElementById('xr-ui').classList.add('show');
+
+  if(!navigator.xr){ log('no WebXR — flat mode'); return; }
+
   let supported = false;
   try { supported = await navigator.xr.isSessionSupported('immersive-ar'); } catch(e){}
-  if(!supported){ showUI(); return; }
+  log('immersive-ar: '+supported);
+  if(!supported){ log('flat mode'); return; }
 
   try {
     const session = await navigator.xr.requestSession('immersive-ar', {
@@ -196,52 +209,28 @@ async function enterAR(){
       optionalFeatures: ['dom-overlay'],
       domOverlay: { root: document.getElementById('xr-ui') }
     });
+    log('sessione OK');
 
-    // Setup GL
     const canvas = document.getElementById('c');
     canvas.style.display = 'block';
     const gl = canvas.getContext('webgl', { xrCompatible:true });
     await gl.makeXRCompatible();
     session.updateRenderState({ baseLayer: new XRWebGLLayer(session, gl) });
 
-    // Mostra UI
-    showUI();
-
-    // Loop XR minimo per mantenere sessione attiva
-    session.requestAnimationFrame(function loop(t, frame){
+    session.requestAnimationFrame(function loop(t,f){
       session.requestAnimationFrame(loop);
     });
 
-    session.addEventListener('end', ()=>{
-      document.getElementById('xr-ui').classList.remove('show');
-      document.getElementById('enter-screen').style.display = 'flex';
-    });
+    session.addEventListener('end', ()=>{ log('sessione terminata'); });
+    log('loop XR avviato');
 
   } catch(e){
-    console.error(e);
-    showUI(); // fallback flat
+    log('errore XR: '+e.message);
   }
 }
 
-function showUI(){
-  document.getElementById('enter-screen').style.display = 'none';
-  document.getElementById('xr-ui').classList.add('show');
-  updatePanel(zones[0]);
-}
-
 document.getElementById('btn-ar').addEventListener('click', enterAR);
-
-// Check supporto all'avvio
-window.addEventListener('load', async ()=>{
-  updatePanel(zones[0]);
-  const st = document.getElementById('xr-status');
-  if(!navigator.xr){ st.textContent = 'WebXR non disponibile — modalità flat'; document.getElementById('btn-ar').textContent='APRI DEMO'; return; }
-  try {
-    const ok = await navigator.xr.isSessionSupported('immersive-ar');
-    st.textContent = ok ? '✓ AR supportata — Quest 3 pronto' : 'AR non supportata — modalità flat';
-    if(!ok) document.getElementById('btn-ar').textContent = 'APRI DEMO';
-  } catch(e){ st.textContent = 'errore: '+e.message; }
-});
+updatePanel(zones[0]);
 </script>
 </body>
 </html>
