@@ -4,308 +4,114 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>AR Centralina — DKNatureLink</title>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-
-  <style>
-    #xr-overlay {
-      position: fixed; inset: 0; z-index: 9999;
-      background: #000;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 20px;
-    }
-    #xr-overlay.hidden { display: none; }
-    #xr-overlay p {
-      color: rgba(255,255,255,0.5); font-size: 13px;
-      font-family: -apple-system, sans-serif; text-align: center;
-      max-width: 280px; line-height: 1.5;
-    }
-    #btn-enter-ar {
-      padding: 16px 40px;
-      background: rgba(0,255,136,0.15);
-      border: 1.5px solid #00ff88;
-      border-radius: 10px;
-      color: #00ff88; font-size: 16px; font-weight: 600;
-      letter-spacing: 0.08em; cursor: pointer;
-      font-family: -apple-system, sans-serif;
-    }
-    #btn-enter-ar:disabled {
-      opacity: 0.35; cursor: not-allowed;
-      border-color: rgba(255,255,255,0.3); color: rgba(255,255,255,0.3);
-    }
-    #xr-status {
-      color: rgba(255,255,255,0.4); font-size: 11px;
-      font-family: monospace; letter-spacing: 0.05em;
-    }
-  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #000; }
+    body { background: #000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
 
-    #ui-overlay {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      pointer-events: none; z-index: 100;
+    canvas { display: block; position: fixed; inset: 0; }
+
+    /* ── Overlay UI 2D (dom-overlay, visibile nel visore) ── */
+    #dom-overlay {
+      position: fixed; inset: 0; pointer-events: none;
+      display: flex; flex-direction: column;
+      justify-content: flex-end; padding: 24px;
+      z-index: 10;
     }
 
-    /* HUD top bar */
-    #hud-top {
-      position: absolute; top: 16px; left: 16px; right: 16px;
-      display: flex; align-items: center; gap: 10px;
-    }
-    .hud-chip {
-      font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
-      color: #00ff88; background: rgba(0,255,136,0.1);
-      border: 1px solid rgba(0,255,136,0.35);
-      border-radius: 4px; padding: 4px 10px;
-    }
-    .hud-rec {
-      display: flex; align-items: center; gap: 5px;
-      font-size: 11px; color: rgba(255,80,80,0.9);
-      margin-left: auto;
-    }
-    .rec-dot {
-      width: 7px; height: 7px; border-radius: 50%; background: #ff5050;
-      animation: blink 1.2s ease infinite;
-    }
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
-
-    /* Bottom info panel */
     #info-panel {
-      position: absolute; bottom: 24px; left: 16px; right: 16px;
-      background: rgba(6,18,10,0.92);
-      border: 1px solid rgba(0,255,136,0.35);
-      border-radius: 12px; padding: 16px 18px;
-      transition: opacity 0.4s ease, transform 0.4s ease;
-      opacity: 0; transform: translateY(12px);
+      background: rgba(6,18,10,0.90);
+      border: 1px solid rgba(0,255,136,0.4);
+      border-radius: 14px; padding: 18px 20px;
+      max-width: 480px; width: 100%;
+      opacity: 0; transform: translateY(10px);
+      transition: opacity 0.4s, transform 0.4s;
+      pointer-events: all;
     }
     #info-panel.visible { opacity: 1; transform: translateY(0); }
 
-    .panel-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    .panel-id {
-      font-size: 10px; color: #00ff88; letter-spacing: 0.1em;
-      text-transform: uppercase; font-weight: 600;
-    }
-    .panel-ts { font-size: 10px; color: rgba(255,255,255,0.4); }
+    .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .panel-id { font-size: 11px; color: #00ff88; letter-spacing: 0.1em; font-weight: 700; text-transform: uppercase; }
+    .panel-ts { font-size: 10px; color: rgba(255,255,255,0.35); }
 
-    .metrics-row {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-      margin-bottom: 12px;
-    }
-    .metric-box {
-      background: rgba(255,255,255,0.05);
-      border-radius: 8px; padding: 10px 12px;
-    }
-    .metric-label { font-size: 10px; color: rgba(255,255,255,0.45); margin-bottom: 4px; }
-    .metric-value { font-size: 20px; font-weight: 600; }
+    .metrics-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 12px; }
+    .metric-box { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px; }
+    .metric-label { font-size: 10px; color: rgba(255,255,255,0.4); margin-bottom: 4px; }
+    .metric-value { font-size: 22px; font-weight: 600; }
     .metric-unit { font-size: 11px; font-weight: 400; }
-    .c-ok    { color: #4ade80; }
-    .c-warn  { color: #fbbf24; }
-    .c-danger{ color: #f87171; }
-    .c-white { color: #fff; }
+    .c-ok { color: #4ade80; } .c-warn { color: #fbbf24; } .c-danger { color: #f87171; } .c-white { color: #fff; }
 
-    .moisture-bar-wrap {
-      width: 100%; height: 4px; background: rgba(255,255,255,0.1);
-      border-radius: 2px; margin: 6px 0 12px;
-    }
-    .moisture-bar-fill {
-      height: 100%; border-radius: 2px;
-      transition: width 0.6s ease, background 0.6s ease;
-    }
+    .bar-wrap { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin: 0 0 12px; }
+    .bar-fill { height: 100%; border-radius: 2px; transition: width .6s, background .6s; }
 
-    .status-row {
-      display: flex; align-items: center; gap: 8px;
-      padding-top: 10px;
-      border-top: 0.5px solid rgba(0,255,136,0.15);
-    }
-    .status-badge {
-      display: flex; align-items: center; gap: 5px;
-      font-size: 11px; font-weight: 500;
-      padding: 4px 10px; border-radius: 6px;
-    }
-    .badge-ok     { background: rgba(74,222,128,0.15); color: #4ade80; }
-    .badge-warn   { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .status-row { display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: .5px solid rgba(0,255,136,0.15); }
+    .badge { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 6px; }
+    .badge-ok { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .badge-warn { background: rgba(251,191,36,0.15); color: #fbbf24; }
     .badge-danger { background: rgba(248,113,113,0.15); color: #f87171; }
-    .badge-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
-    .bdot-ok     { background: #4ade80; }
-    .bdot-warn   { background: #fbbf24; }
-    .bdot-danger { background: #f87171; }
+    .bdot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .alert-box { font-size: 10px; color: #fbbf24; margin-top: 8px; padding: 6px 10px; background: rgba(251,191,36,0.08); border-left: 2px solid #fbbf24; border-radius: 0 4px 4px 0; }
 
-    .alert-text {
-      font-size: 10px; color: #fbbf24; margin-top: 6px;
-      padding: 6px 10px; background: rgba(251,191,36,0.08);
-      border-left: 2px solid #fbbf24; border-radius: 0 4px 4px 0;
-    }
+    /* HUD top */
+    #hud { position: fixed; top: 16px; left: 16px; right: 16px; display: flex; gap: 8px; align-items: center; pointer-events: none; z-index: 11; }
+    .chip { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #00ff88; background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.35); border-radius: 4px; padding: 4px 10px; }
+    .rec { display: flex; align-items: center; gap: 5px; font-size: 11px; color: rgba(255,80,80,0.9); margin-left: auto; }
+    .recdot { width: 7px; height: 7px; border-radius: 50%; background: #ff5050; animation: blink 1.2s ease infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.15} }
 
-    /* Scanning status overlay */
-    #scan-status {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 12px; color: rgba(0,255,136,0.7);
-      letter-spacing: 0.12em; text-align: center;
-      pointer-events: none;
-      transition: opacity 0.3s;
-    }
-    #scan-status.hidden { opacity: 0; }
+    /* Zone switcher */
+    #zone-sw { position: fixed; top: 56px; right: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 11; }
+    .zbtn { font-size: 10px; font-weight: 700; letter-spacing: .06em; color: rgba(0,255,136,0.8); background: rgba(6,18,10,0.85); border: 1px solid rgba(0,255,136,0.25); border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+    .zbtn.active { border-color: rgba(0,255,136,0.8); background: rgba(0,255,136,0.12); }
 
-    /* Zone switcher (for demo/testing without marker) */
-    #zone-switcher {
-      position: absolute; top: 56px; right: 16px;
-      display: flex; flex-direction: column; gap: 6px;
-      pointer-events: all;
+    /* Enter AR screen */
+    #enter-screen {
+      position: fixed; inset: 0; z-index: 999;
+      background: #000; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 20px;
     }
-    .zone-btn {
-      font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
-      color: rgba(0,255,136,0.8);
-      background: rgba(6,18,10,0.85);
-      border: 1px solid rgba(0,255,136,0.25);
-      border-radius: 6px; padding: 6px 12px;
-      cursor: pointer; text-align: center;
-      transition: border-color 0.15s, background 0.15s;
-    }
-    .zone-btn.active {
-      border-color: rgba(0,255,136,0.8);
-      background: rgba(0,255,136,0.12);
-    }
-
-    /* Demo mode banner */
-    #demo-banner {
-      position: absolute; bottom: 220px; left: 16px; right: 16px;
-      background: rgba(6,18,10,0.7);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 8px; padding: 8px 14px;
-      font-size: 10px; color: rgba(255,255,255,0.45);
-      text-align: center; letter-spacing: 0.04em;
-      pointer-events: none;
-    }
+    #enter-screen.hidden { display: none; }
+    #enter-screen p { color: rgba(255,255,255,0.45); font-size: 13px; text-align: center; max-width: 280px; line-height: 1.6; }
+    #btn-ar { padding: 16px 44px; background: rgba(0,255,136,0.12); border: 1.5px solid #00ff88; border-radius: 10px; color: #00ff88; font-size: 16px; font-weight: 700; letter-spacing: .08em; cursor: pointer; }
+    #xr-status { color: rgba(255,255,255,0.35); font-size: 11px; font-family: monospace; }
   </style>
 </head>
 <body>
 
-<!-- ─── Enter AR overlay ─── -->
-<div id="xr-overlay">
+<!-- Enter AR screen -->
+<div id="enter-screen">
   <p>Protolab · DKNatureLink AR</p>
-  <button id="btn-enter-ar" onclick="enterAR()">ENTRA IN AR</button>
-  <div id="xr-status">verifica supporto WebXR...</div>
+  <button id="btn-ar">ENTRA IN AR</button>
+  <div id="xr-status">verifica supporto...</div>
 </div>
 
-<!-- ─── AR.js scene ─── -->
-<a-scene
-  embedded
-  arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
-  vr-mode-ui="enabled: false"
-  renderer="logarithmicDepthBuffer: true; antialias: true;"
->
+<!-- Canvas Three.js -->
+<canvas id="c"></canvas>
 
-  <!-- Marker Aruco 3x3 ID=1 (default "hiro" come fallback) -->
-  <a-marker type="barcode" value="1" id="marker-aruco">
-    <!-- Pannello 3D sopra la centralina -->
-    <a-entity position="0 0.5 0">
-
-      <!-- Sfondo pannello -->
-      <a-plane
-        width="1.8" height="1.1"
-        color="#06120a"
-        opacity="0.92"
-        position="0 0 0"
-      ></a-plane>
-
-      <!-- Bordo verde -->
-      <a-plane
-        width="1.82" height="1.12"
-        color="#00ff88"
-        opacity="0.35"
-        position="0 0 -0.001"
-      ></a-plane>
-
-      <!-- Titolo zona -->
-      <a-text
-        value="ZONA NORD — CEN-001"
-        color="#00ff88"
-        width="1.6" align="left"
-        position="-0.82 0.42 0.01"
-        font="https://cdn.jsdelivr.net/npm/aframe/examples/fonts/mozillavr.fnt"
-      ></a-text>
-
-      <!-- Soil moisture label -->
-      <a-text value="Soil moisture" color="#ffffff" opacity="0.5"
-        width="1.1" align="left" position="-0.82 0.22 0.01"></a-text>
-      <a-text value="72 %" color="#4ade80" id="ar3d-moisture"
-        width="1.4" align="right" position="0.82 0.22 0.01"></a-text>
-
-      <!-- Irrigazione -->
-      <a-text value="Irrigazione" color="#ffffff" opacity="0.5"
-        width="1.1" align="left" position="-0.82 0.04 0.01"></a-text>
-      <a-text value="OFF — ok" color="#4ade80" id="ar3d-irr"
-        width="1.4" align="right" position="0.82 0.04 0.01"></a-text>
-
-      <!-- Temp -->
-      <a-text value="Temp. suolo" color="#ffffff" opacity="0.5"
-        width="1.1" align="left" position="-0.82 -0.14 0.01"></a-text>
-      <a-text value="19.4 °C" color="#ffffff" id="ar3d-temp"
-        width="1.4" align="right" position="0.82 -0.14 0.01"></a-text>
-
-      <!-- Divider -->
-      <a-plane width="1.7" height="0.005" color="#00ff88" opacity="0.2"
-        position="0 -0.24 0.01"></a-plane>
-
-      <!-- Stato -->
-      <a-text value="● Sistema normale" color="#4ade80" id="ar3d-status"
-        width="1.6" align="center" position="0 -0.36 0.01"></a-text>
-
-    </a-entity>
-  </a-marker>
-
-  <!-- Fallback: marker Hiro standard (più facile da stampare per test rapido) -->
-  <a-marker preset="hiro" id="marker-hiro">
-    <a-entity position="0 0.5 0">
-      <a-plane width="1.8" height="0.6" color="#06120a" opacity="0.92"></a-plane>
-      <a-plane width="1.82" height="0.62" color="#00ff88" opacity="0.35" position="0 0 -0.001"></a-plane>
-      <a-text value="HIRO MARKER — CEN-TEST" color="#00ff88"
-        width="1.6" align="center" position="0 0.1 0.01"></a-text>
-      <a-text value="Soil: 72% | Temp: 19.4°C | Stato: OK" color="#4ade80"
-        width="1.6" align="center" position="0 -0.1 0.01"></a-text>
-    </a-entity>
-  </a-marker>
-
-  <a-entity camera></a-entity>
-</a-scene>
-
-
-<!-- ─── UI overlay ─── -->
-<div id="ui-overlay">
-
-  <div id="hud-top">
-    <div class="hud-chip">AR LIVE</div>
-    <div class="hud-chip" id="hud-zone-chip">ZONA NORD</div>
-    <div class="hud-rec"><div class="rec-dot"></div>REC</div>
+<!-- DOM overlay (visibile nel visore) -->
+<div id="dom-overlay">
+  <div id="hud">
+    <div class="chip">AR LIVE</div>
+    <div class="chip" id="chip-zone">ZONA NORD</div>
+    <div class="rec"><div class="recdot"></div>REC</div>
   </div>
 
-  <!-- Zone switcher (demo: seleziona zona senza marker fisici diversi) -->
-  <div id="zone-switcher">
-    <div class="zone-btn active" onclick="selectZone(0)">NORD</div>
-    <div class="zone-btn" onclick="selectZone(1)">EST</div>
-    <div class="zone-btn" onclick="selectZone(2)">SUD</div>
+  <div id="zone-sw">
+    <div class="zbtn active" onclick="selectZone(0)">NORD</div>
+    <div class="zbtn" onclick="selectZone(1)">EST</div>
+    <div class="zbtn" onclick="selectZone(2)">SUD</div>
   </div>
-
-  <div id="scan-status">PUNTA LA CAMERA<br>AL MARKER ARUCO</div>
-
-  <div id="demo-banner">Demo mode — usa i pulsanti per cambiare zona · oppure stampa il marker Hiro</div>
 
   <div id="info-panel">
     <div class="panel-header">
-      <div class="panel-id" id="panel-id">ZONA NORD — CEN-001</div>
-      <div class="panel-ts" id="panel-ts">aggiornato 2 min fa</div>
+      <div class="panel-id" id="p-id">ZONA NORD — CEN-001</div>
+      <div class="panel-ts" id="p-ts">aggiornato 2 min fa</div>
     </div>
-
     <div class="metrics-row">
       <div class="metric-box">
         <div class="metric-label">Soil moisture</div>
-        <div class="metric-value c-ok" id="m-moisture">72<span class="metric-unit">%</span></div>
+        <div class="metric-value c-ok" id="m-moist">72<span class="metric-unit">%</span></div>
       </div>
       <div class="metric-box">
         <div class="metric-label">Temp. suolo</div>
@@ -316,205 +122,146 @@
         <div class="metric-value c-ok" id="m-irr">OFF</div>
       </div>
     </div>
-
-    <div class="moisture-bar-wrap">
-      <div class="moisture-bar-fill" id="moisture-bar" style="width:72%; background:#4ade80;"></div>
-    </div>
-
+    <div class="bar-wrap"><div class="bar-fill" id="bar" style="width:72%;background:#4ade80"></div></div>
     <div class="status-row">
-      <div class="status-badge badge-ok" id="status-badge">
-        <span class="badge-dot bdot-ok" id="badge-dot"></span>
-        <span id="badge-text">Sistema normale</span>
-      </div>
+      <div class="badge badge-ok" id="badge"><span class="bdot" id="bdot" style="background:#4ade80"></span><span id="badge-txt">Sistema normale</span></div>
     </div>
-
-    <div class="alert-text" id="alert-text" style="display:none"></div>
+    <div class="alert-box" id="alert-box" style="display:none"></div>
   </div>
-
 </div>
 
-
 <script>
-// ─── Dati centraline (simulati — sostituire con fetch Firebase) ───
-// Per collegare Firebase Realtime DB:
-//   import { initializeApp } from "firebase/app";
-//   import { getDatabase, ref, onValue } from "firebase/database";
-//   const db = getDatabase(app);
-//   onValue(ref(db, 'centraline/CEN-001'), snap => updatePanel(snap.val()));
-
+// ── Dati centraline (sostituire con fetch Firebase) ──
 const zones = [
-  {
-    id: 'CEN-001', name: 'Zona Nord', chip: 'ZONA NORD',
-    moisture: 72, temp: 19.4, irrigation: false,
-    anomaly: false, alertText: '',
-    lastUpdate: '2 min fa', status: 'ok'
-  },
-  {
-    id: 'CEN-002', name: 'Zona Est', chip: 'ZONA EST',
-    moisture: 31, temp: 22.1, irrigation: true,
-    anomaly: true, alertText: 'Pressione valvola anomala — verifica raccordo V3',
-    lastUpdate: '8 min fa', status: 'danger'
-  },
-  {
-    id: 'CEN-003', name: 'Zona Sud', chip: 'ZONA SUD',
-    moisture: 54, temp: 21.0, irrigation: false,
-    anomaly: true, alertText: 'Soil moisture in calo — schedulare irrigazione',
-    lastUpdate: '5 min fa', status: 'warn'
-  }
+  { id:'CEN-001', name:'Zona Nord', chip:'ZONA NORD', moisture:72, temp:19.4, irrigation:false, anomaly:false, alertText:'', lastUpdate:'2 min fa', status:'ok' },
+  { id:'CEN-002', name:'Zona Est',  chip:'ZONA EST',  moisture:31, temp:22.1, irrigation:true,  anomaly:true,  alertText:'Pressione valvola anomala — verifica raccordo V3', lastUpdate:'8 min fa', status:'danger' },
+  { id:'CEN-003', name:'Zona Sud',  chip:'ZONA SUD',  moisture:54, temp:21.0, irrigation:false, anomaly:true,  alertText:'Soil moisture in calo — schedulare irrigazione', lastUpdate:'5 min fa', status:'warn' }
 ];
-
 let currentZone = 0;
 
-function moistureColor(v) {
-  return v < 35 ? '#f87171' : v < 50 ? '#fbbf24' : '#4ade80';
-}
-function moistureClass(v) {
-  return v < 35 ? 'c-danger' : v < 50 ? 'c-warn' : 'c-ok';
-}
-function statusInfo(z) {
-  if (z.status === 'ok')     return { cls: 'badge-ok',     dot: 'bdot-ok',     text: 'Sistema normale' };
-  if (z.status === 'warn')   return { cls: 'badge-warn',   dot: 'bdot-warn',   text: 'Attenzione richiesta' };
-  return                            { cls: 'badge-danger', dot: 'bdot-danger', text: 'Anomalia rilevata' };
-}
+function mCol(v){ return v<35?'#f87171':v<50?'#fbbf24':'#4ade80'; }
+function mCls(v){ return v<35?'c-danger':v<50?'c-warn':'c-ok'; }
 
-function updatePanel(z) {
-  // HUD chip
-  document.getElementById('hud-zone-chip').textContent = z.chip;
-
-  // Bottom panel
-  document.getElementById('panel-id').textContent = `${z.name.toUpperCase()} — ${z.id}`;
-  document.getElementById('panel-ts').textContent = `aggiornato ${z.lastUpdate}`;
-
-  const mc = moistureClass(z.moisture);
-  document.getElementById('m-moisture').className = `metric-value ${mc}`;
-  document.getElementById('m-moisture').innerHTML = `${z.moisture}<span class="metric-unit">%</span>`;
+function updatePanel(z){
+  document.getElementById('chip-zone').textContent = z.chip;
+  document.getElementById('p-id').textContent = `${z.name.toUpperCase()} — ${z.id}`;
+  document.getElementById('p-ts').textContent = `aggiornato ${z.lastUpdate}`;
+  document.getElementById('m-moist').className = `metric-value ${mCls(z.moisture)}`;
+  document.getElementById('m-moist').innerHTML = `${z.moisture}<span class="metric-unit">%</span>`;
   document.getElementById('m-temp').innerHTML = `${z.temp}<span class="metric-unit">°C</span>`;
-  document.getElementById('m-irr').className = `metric-value ${z.irrigation ? 'c-warn' : 'c-ok'}`;
-  document.getElementById('m-irr').textContent = z.irrigation ? 'ON' : 'OFF';
-
-  document.getElementById('moisture-bar').style.width = z.moisture + '%';
-  document.getElementById('moisture-bar').style.background = moistureColor(z.moisture);
-
-  const si = statusInfo(z);
-  const badge = document.getElementById('status-badge');
-  badge.className = `status-badge ${si.cls}`;
-  document.getElementById('badge-dot').className = `badge-dot ${si.dot}`;
-  document.getElementById('badge-text').textContent = si.text;
-
-  const alertEl = document.getElementById('alert-text');
-  if (z.anomaly) {
-    alertEl.style.display = 'block';
-    alertEl.textContent = z.alertText;
-  } else {
-    alertEl.style.display = 'none';
-  }
-
-  // 3D AR text (se il marker è visibile)
-  try {
-    document.querySelector('#ar3d-moisture').setAttribute('value', z.moisture + ' %');
-    document.querySelector('#ar3d-moisture').setAttribute('color', moistureColor(z.moisture));
-    document.querySelector('#ar3d-irr').setAttribute('value', z.irrigation ? 'ON — attiva' : 'OFF — ok');
-    document.querySelector('#ar3d-irr').setAttribute('color', z.irrigation ? '#fbbf24' : '#4ade80');
-    document.querySelector('#ar3d-temp').setAttribute('value', z.temp + ' °C');
-    document.querySelector('#ar3d-status').setAttribute('value',
-      z.anomaly ? '⚠ ' + z.alertText.substring(0,30) + '...' : '● Sistema normale');
-    document.querySelector('#ar3d-status').setAttribute('color',
-      z.status === 'ok' ? '#4ade80' : z.status === 'warn' ? '#fbbf24' : '#f87171');
-  } catch(e) {}
+  document.getElementById('m-irr').className = `metric-value ${z.irrigation?'c-warn':'c-ok'}`;
+  document.getElementById('m-irr').textContent = z.irrigation?'ON':'OFF';
+  document.getElementById('bar').style.width = z.moisture+'%';
+  document.getElementById('bar').style.background = mCol(z.moisture);
+  const bc = z.status==='ok'?'badge-ok':z.status==='warn'?'badge-warn':'badge-danger';
+  document.getElementById('badge').className = `badge ${bc}`;
+  document.getElementById('bdot').style.background = mCol(z.moisture);
+  document.getElementById('badge-txt').textContent = z.status==='ok'?'Sistema normale':z.status==='warn'?'Attenzione richiesta':'Anomalia rilevata';
+  const ab = document.getElementById('alert-box');
+  ab.style.display = z.anomaly?'block':'none';
+  ab.textContent = z.alertText;
 }
 
-function selectZone(i) {
+function selectZone(i){
   currentZone = i;
-  document.querySelectorAll('.zone-btn').forEach((b, idx) => {
-    b.classList.toggle('active', idx === i);
-  });
+  document.querySelectorAll('.zbtn').forEach((b,idx)=>b.classList.toggle('active',idx===i));
   updatePanel(zones[i]);
-  showPanel();
 }
 
-function showPanel() {
-  document.getElementById('info-panel').classList.add('visible');
-  document.getElementById('scan-status').classList.add('hidden');
-}
+// ── Three.js + WebXR ──
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true;
 
-// ─── Marker detection events ───
-document.querySelector('#marker-aruco').addEventListener('markerFound', () => {
-  showPanel();
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 100);
+scene.add(camera);
+
+// Luce ambiente
+scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+
+// Pannello 3D: piano verde semitrasparente fisso davanti alla camera
+// Posizionato a 1.5m davanti, altezza occhi
+const panelGeo = new THREE.PlaneGeometry(0.6, 0.35);
+const panelMat = new THREE.MeshBasicMaterial({
+  color: 0x06120a, transparent: true, opacity: 0.0,
+  side: THREE.DoubleSide
 });
-document.querySelector('#marker-aruco').addEventListener('markerLost', () => {
-  // mantieni il pannello visibile per 3 secondi dopo aver perso il marker
-  setTimeout(() => {
-    if (!markerVisible) {
-      document.getElementById('info-panel').classList.remove('visible');
-      document.getElementById('scan-status').classList.remove('hidden');
-    }
-  }, 3000);
+const panel3d = new THREE.Mesh(panelGeo, panelMat);
+panel3d.position.set(0, 0, -1.5);
+camera.add(panel3d);
+
+// Bordo verde del pannello
+const borderGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(0.62, 0.37));
+const borderMat = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.5 });
+const border3d = new THREE.LineSegments(borderGeo, borderMat);
+border3d.position.set(0, 0, -1.499);
+camera.add(border3d);
+
+// Resize handler
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
 });
 
-document.querySelector('#marker-hiro').addEventListener('markerFound', showPanel);
+// ── Render loop ──
+renderer.setAnimationLoop((time, frame) => {
+  renderer.render(scene, camera);
+});
 
-// Inizializza
-updatePanel(zones[0]);
-
-// Auto-mostra il pannello in demo mode (senza marker fisico)
-setTimeout(showPanel, 1500);
-
-// ─── WebXR Enter AR ───
-async function enterAR() {
-  if (navigator.xr) {
-    try {
-      const supported = await navigator.xr.isSessionSupported('immersive-ar');
-      if (supported) {
-        const session = await navigator.xr.requestSession('immersive-ar', {
-          requiredFeatures: ['local'],
-          optionalFeatures: ['dom-overlay'],
-          domOverlay: { root: document.getElementById('ui-overlay') }
-        });
-        document.getElementById('xr-overlay').classList.add('hidden');
-        // Hand off to A-Frame if possible
-        const sceneEl = document.querySelector('a-scene');
-        if (sceneEl && sceneEl.xrSession === undefined) {
-          sceneEl.enterAR();
-        }
-        return;
-      }
-    } catch(e) {
-      console.warn('WebXR requestSession failed:', e);
-    }
-  }
-  // Fallback: hide overlay and show page normally (tablet/desktop)
-  document.getElementById('xr-overlay').classList.add('hidden');
-  showPanel();
-}
-
-// Check WebXR support on load
-window.addEventListener('load', async () => {
-  const statusEl = document.getElementById('xr-status');
-  const btnEl = document.getElementById('btn-enter-ar');
+// ── Enter AR ──
+async function enterAR(){
   if (!navigator.xr) {
-    statusEl.textContent = 'WebXR non supportato — modalità flat';
-    btnEl.textContent = 'APRI DEMO';
-    btnEl.disabled = false;
+    // Fallback flat mode
+    document.getElementById('enter-screen').classList.add('hidden');
+    document.getElementById('info-panel').classList.add('visible');
     return;
   }
   try {
-    const arSupported = await navigator.xr.isSessionSupported('immersive-ar');
-    if (arSupported) {
-      statusEl.textContent = 'AR supportata ✓ — Quest 3 / tablet rilevato';
-      btnEl.disabled = false;
+    const supported = await navigator.xr.isSessionSupported('immersive-ar');
+    if (supported) {
+      const session = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['local'],
+        optionalFeatures: ['dom-overlay'],
+        domOverlay: { root: document.getElementById('dom-overlay') }
+      });
+      renderer.xr.setSession(session);
+      document.getElementById('enter-screen').classList.add('hidden');
+      // Mostra panel dopo mezzo secondo
+      setTimeout(()=>{ document.getElementById('info-panel').classList.add('visible'); }, 500);
     } else {
-      statusEl.textContent = 'AR non supportata — modalità flat';
-      btnEl.textContent = 'APRI DEMO';
-      btnEl.disabled = false;
+      // Flat fallback
+      document.getElementById('enter-screen').classList.add('hidden');
+      document.getElementById('info-panel').classList.add('visible');
     }
   } catch(e) {
-    statusEl.textContent = 'errore verifica: ' + e.message;
-    btnEl.textContent = 'APRI DEMO';
-    btnEl.disabled = false;
+    console.error('XR error:', e);
+    document.getElementById('xr-status').textContent = 'Errore: ' + e.message;
+  }
+}
+
+document.getElementById('btn-ar').addEventListener('click', enterAR);
+
+// ── Check WebXR on load ──
+window.addEventListener('load', async () => {
+  const st = document.getElementById('xr-status');
+  updatePanel(zones[0]);
+  if (!navigator.xr) {
+    st.textContent = 'WebXR non disponibile — modalità flat';
+    document.getElementById('btn-ar').textContent = 'APRI DEMO';
+    return;
+  }
+  try {
+    const ok = await navigator.xr.isSessionSupported('immersive-ar');
+    st.textContent = ok ? '✓ AR supportata — Quest 3 pronto' : 'AR non supportata — modalità flat';
+    if (!ok) document.getElementById('btn-ar').textContent = 'APRI DEMO';
+  } catch(e) {
+    st.textContent = 'errore: ' + e.message;
   }
 });
-
 </script>
-
 </body>
 </html>
