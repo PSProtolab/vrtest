@@ -193,7 +193,10 @@ async function enterAR(){
   log('click...');
   updatePanel(zones[0]);
 
-  // Mostra UI PRIMA di avviare la sessione — chiave del funzionamento
+  // Nascondi schermata iniziale e mostra UI — PRIMA della sessione
+  document.querySelector('body > p').style.display = 'none';
+  document.getElementById('btn-ar').style.display = 'none';
+  document.getElementById('log').style.display = 'none';
   document.getElementById('xr-ui').classList.add('show');
 
   if(!navigator.xr){ log('no WebXR — flat mode'); return; }
